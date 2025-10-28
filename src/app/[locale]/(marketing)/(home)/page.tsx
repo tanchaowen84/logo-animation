@@ -46,7 +46,7 @@ export default async function HomePage(props: HomePageProps) {
       <div className="flex flex-col">
         <HeroSection />
 
-        <DemoSection />
+        {/* <DemoSection />
 
         <UseCasesSection />
 
@@ -62,7 +62,7 @@ export default async function HomePage(props: HomePageProps) {
 
         <FaqSection />
 
-        <CallToActionSection />
+        <CallToActionSection /> */}
       </div>
     </>
   );
