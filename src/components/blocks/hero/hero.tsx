@@ -18,6 +18,13 @@ export default function HeroSection() {
     height: number;
     originalFormat: string | null;
   } | null>(null);
+  const [labels, setLabels] = useState<
+    Array<{
+      id: string;
+      label: string;
+      reason?: string;
+    }>
+  >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const uploadHintClassName = useMemo(
@@ -45,6 +52,7 @@ export default function HeroSection() {
       setError(null);
       setSvgResult(null);
       setMeta(null);
+      setLabels([]);
 
       try {
         const formData = new FormData();
@@ -70,6 +78,11 @@ export default function HeroSection() {
           width: number;
           height: number;
           originalFormat: string | null;
+          labels?: Array<{
+            id: string;
+            label: string;
+            reason?: string;
+          }>;
         };
 
         setSvgResult(data.svg);
@@ -78,6 +91,7 @@ export default function HeroSection() {
           height: data.height,
           originalFormat: data.originalFormat,
         });
+        setLabels(data.labels ?? []);
         toast.success('矢量化完成，已生成分层 SVG');
       } catch (err) {
         console.error(err);
@@ -261,6 +275,36 @@ export default function HeroSection() {
                           </pre>
                         </div>
                       </div>
+
+                      {labels.length > 0 && (
+                        <div className="mt-6">
+                          <div className="mb-3 text-sm font-medium text-foreground">
+                            AI 语义标签
+                          </div>
+                          <div className="max-h-72 overflow-auto rounded-xl border border-border/60">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-muted/40 text-muted-foreground uppercase tracking-wide">
+                                <tr>
+                                  <th className="px-4 py-2">ID</th>
+                                  <th className="px-4 py-2">标签</th>
+                                  <th className="px-4 py-2">理由</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {labels.map((item) => (
+                                  <tr key={item.id} className="border-t border-border/40 text-foreground">
+                                    <td className="px-4 py-2 font-mono">{item.id}</td>
+                                    <td className="px-4 py-2">{item.label}</td>
+                                    <td className="px-4 py-2 text-muted-foreground">
+                                      {item.reason ?? '—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

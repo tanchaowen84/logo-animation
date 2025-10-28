@@ -8,7 +8,13 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const nextConfig: NextConfig = {
   /* config options here */
   devIndicators: false,
-  serverExternalPackages: ['@neplex/vectorizer', 'sharp'],
+  serverExternalPackages: [
+    '@neplex/vectorizer',
+    'sharp',
+    'svg-path-bounds',
+    'normalize-svg-path',
+    'svg-arc-to-cubic-bezier',
+  ],
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console
   // Remove all console.* calls in production only

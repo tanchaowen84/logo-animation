@@ -70,3 +70,9 @@ Logo Animation — MVP
 4. 标签写回
    - 根据模型返回结果，把语义标签写入原 SVG 的对应元素（例如 `<g data-layer="logomark">`），保持结构一致，便于动画引擎使用。
    - 对模型输出做格式校验，必要时允许人工修正并将案例回流提示词调优。
+
+AI 标注环境变量
+- `OPENROUTER_API_KEY`：OpenRouter API 密钥（部署时填写，默认留空）。
+- `OPENROUTER_API_BASE_URL`：可选，自定义网关地址，默认 `https://openrouter.ai/api/v1`。
+- `OPENROUTER_HTTP_REFERER` / `OPENROUTER_HTTP_TITLE`：可选，用于 OpenRouter 排名统计。
+- `OPENROUTER_LOGO_LABEL_MODEL`：可选，指定使用的模型名称，默认 `google/gemini-2.5-flash`。

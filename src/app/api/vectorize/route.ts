@@ -1,4 +1,8 @@
+import { labelSvgElements } from '@/lib/ai/vector-labeler';
 import { vectorizeLogoFromBuffer } from '@/lib/vectorizer/logo';
+import { bufferToPngDataUrl } from '@/lib/vectorizer/image';
+import { parseSvgForLabeling, applySemanticLabelsToSvg } from '@/lib/vectorizer/svg';
+import type { SvgLabelResponse } from '@/lib/vectorizer/types';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -41,8 +45,40 @@ export async function POST(request: NextRequest) {
 
     const result = await vectorizeLogoFromBuffer(buffer);
 
-    return NextResponse.json({
+    const nodes = parseSvgForLabeling(result.svg);
+
+    let responsePayload: SvgLabelResponse = {
       svg: result.svg,
+      labels: [],
+    };
+
+    if (nodes.length > 0 && process.env.OPENROUTER_API_KEY) {
+      try {
+        const base64Image = await bufferToPngDataUrl(buffer);
+        const labelResult = await labelSvgElements({
+          nodes,
+          imageBase64: base64Image,
+        });
+
+        const labeledSvg = applySemanticLabelsToSvg(result.svg, labelResult.labels);
+
+        responsePayload = {
+          svg: labeledSvg,
+          labels: labelResult.labels,
+        };
+      } catch (error) {
+        console.warn('Labeling error:', error);
+        responsePayload = {
+          svg: result.svg,
+          labels: [],
+        };
+      }
+    } else if (!process.env.OPENROUTER_API_KEY) {
+      console.warn('OPENROUTER_API_KEY not set, skipping semantic labeling.');
+    }
+
+    return NextResponse.json({
+      ...responsePayload,
       width: result.width,
       height: result.height,
       originalFormat: result.originalFormat,
