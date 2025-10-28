@@ -65,6 +65,7 @@ Logo Animation — MVP
 3. 模型标注
    - 调用多模态大模型，请求按 `{id, label, reason}`（或约定格式）输出，不要求模型改写 SVG，只做语义命名。
    - 标签名称由模型根据原图与元素特征自行命名，必要时可约束输出格式或提供示例，但不预设固定集合。
+   - 通过 OpenRouter 提供的 API（例如 `google/gemini-2.5-flash`），以环境变量提供的 `OPENROUTER_API_KEY` 调用多模态模型；示例调用方式沿用 `openai.chat.completions.create` 并同时上传原图 URL 与结构化摘要。
 
 4. 标签写回
    - 根据模型返回结果，把语义标签写入原 SVG 的对应元素（例如 `<g data-layer="logomark">`），保持结构一致，便于动画引擎使用。
