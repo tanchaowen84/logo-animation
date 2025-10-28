@@ -8,6 +8,7 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const nextConfig: NextConfig = {
   /* config options here */
   devIndicators: false,
+  serverExternalPackages: ['@neplex/vectorizer', 'sharp'],
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console
   // Remove all console.* calls in production only
@@ -50,6 +51,29 @@ const nextConfig: NextConfig = {
         hostname: 'cdn.flowchartai.org',
       },
     ],
+  },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      const externals = config.externals ?? [];
+      const nativeModules = [
+        'commonjs @neplex/vectorizer',
+        'commonjs @neplex/vectorizer-darwin-arm64',
+        'commonjs @neplex/vectorizer-darwin-x64',
+        'commonjs @neplex/vectorizer-linux-arm64-gnu',
+        'commonjs @neplex/vectorizer-linux-x64-gnu',
+        'commonjs @neplex/vectorizer-win32-x64-msvc',
+      ];
+
+      if (Array.isArray(externals)) {
+        config.externals = [...externals, ...nativeModules];
+      } else {
+        config.externals = [
+          externals,
+          ...nativeModules,
+        ];
+      }
+    }
+    return config;
   },
 };
 
