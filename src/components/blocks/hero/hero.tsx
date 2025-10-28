@@ -120,6 +120,20 @@ export default function HeroSection() {
     fileInputRef.current?.click();
   }, []);
 
+  const handleCopySvg = useCallback(async () => {
+    if (!svgResult) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(svgResult);
+      toast.success('SVG 代码已复制到剪贴板');
+    } catch (err) {
+      console.error(err);
+      toast.error('复制失败，请手动复制');
+    }
+  }, [svgResult]);
+
   return (
     <>
       <main id="hero" className="overflow-hidden">
@@ -206,7 +220,7 @@ export default function HeroSection() {
                     <div className="w-full max-w-4xl rounded-2xl border border-border bg-card p-6">
                       <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span className="font-medium text-foreground">
-                          分层 SVG 预览
+                          分层 SVG 结果
                         </span>
                         {meta && (
                           <>
@@ -219,11 +233,33 @@ export default function HeroSection() {
                           </>
                         )}
                       </div>
-                      <div className="bg-muted/40 rounded-xl border border-border/50 p-4">
-                        <div
-                          className="mx-auto flex max-h-[420px] max-w-full items-center justify-center overflow-auto"
-                          dangerouslySetInnerHTML={{ __html: svgResult }}
-                        />
+
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="bg-muted/40 rounded-xl border border-border/50 p-4">
+                          <div
+                            className="mx-auto flex max-h-[420px] max-w-full items-center justify-center overflow-auto"
+                            dangerouslySetInnerHTML={{ __html: svgResult }}
+                          />
+                        </div>
+
+                        <div className="flex flex-col">
+                          <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
+                            <span>SVG 代码</span>
+                            <button
+                              type="button"
+                              onClick={handleCopySvg}
+                              className={cn(
+                                'rounded-md border border-border px-3 py-1 text-xs font-medium transition-colors',
+                                'hover:border-primary hover:text-primary'
+                              )}
+                            >
+                              复制
+                            </button>
+                          </div>
+                          <pre className="h-[420px] overflow-auto rounded-xl border border-border/60 bg-muted/20 p-4 text-xs font-mono leading-relaxed text-foreground">
+                            {svgResult}
+                          </pre>
+                        </div>
                       </div>
                     </div>
                   )}
