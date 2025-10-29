@@ -6,6 +6,7 @@ import path from 'path';
 import ts from 'typescript';
 import { uploadFile } from '@/storage';
 import { buildAnimationPrompt, loadAnimationSystemPrompt } from '@/lib/remotion/prompt';
+import { animationResponseSchema } from '@/lib/remotion/response-schema';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -61,6 +62,10 @@ function parseModelResponse(content: string): AnimationModelResponse {
     throw new Error('模型返回的高度不合法。');
   }
 
+  if (parsed.props === null || parsed.props === undefined) {
+    parsed.props = {};
+  }
+
   return parsed;
 }
 
@@ -95,6 +100,10 @@ function validateTsxFile(filePath: string) {
       declaration: false,
       emitDeclarationOnly: false,
       noEmit: true,
+      allowSyntheticDefaultImports: true,
+      esModuleInterop: true,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      module: ts.ModuleKind.NodeNext,
     },
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -154,7 +163,10 @@ export async function POST(
     const completion = await client.chat.completions.create({
       model,
       temperature: 0.2,
-      response_format: { type: 'json_object' },
+      response_format: {
+        type: 'json_schema',
+        json_schema: animationResponseSchema,
+      },
       messages: [
         {
           role: 'system',

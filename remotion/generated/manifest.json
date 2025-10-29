@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "taskId": "44191d74-f2ff-48b1-9772-5148b813d85c",
+    "compositionId": "LogoAnimation_44191d74-f2ff-48b1-9772-5148b813d85c",
+    "modulePath": "44191d74-f2ff-48b1-9772-5148b813d85c.tsx",
+    "durationInFrames": 150,
+    "fps": 30,
+    "width": 1920,
+    "height": 1080,
+    "defaultProps": {}
+  }
+]

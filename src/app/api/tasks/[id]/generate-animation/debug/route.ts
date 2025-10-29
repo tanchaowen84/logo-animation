@@ -1,6 +1,7 @@
 import { getLogoTaskById } from '@/lib/logo-tasks';
 import { getOpenRouterClient } from '@/lib/ai';
 import { buildAnimationPrompt, loadAnimationSystemPrompt } from '@/lib/remotion/prompt';
+import { animationResponseSchema } from '@/lib/remotion/response-schema';
 import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -81,7 +82,10 @@ export async function GET(
         const completion = await client.chat.completions.create({
           model: process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'google/gemini-2.5-flash',
           temperature: 0.2,
-          response_format: { type: 'json_object' },
+          response_format: {
+            type: 'json_schema',
+            json_schema: animationResponseSchema,
+          },
           stream: true,
           messages: [
             { role: 'system', content: systemPrompt },
