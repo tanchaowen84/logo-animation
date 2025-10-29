@@ -5,10 +5,9 @@ import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
 export type LogoTaskStatus =
-  | 'pending'
   | 'vectorized'
-  | 'ready_to_generate'
   | 'generating_animation'
+  | 'awaiting_render'
   | 'rendering'
   | 'succeeded'
   | 'failed';
@@ -53,6 +52,16 @@ export async function createLogoTask(
     width: params.width ?? null,
     height: params.height ?? null,
     originalFormat: params.originalFormat ?? null,
+    compositionId: null,
+    compositionDurationInFrames: null,
+    compositionFps: null,
+    compositionWidth: null,
+    compositionHeight: null,
+    compositionProps: {},
+    animationFilePath: null,
+    renderedVideoKey: null,
+    renderedVideoUrl: null,
+    renderedAt: null,
     metadata: params.metadata ?? {},
   };
 
@@ -69,6 +78,12 @@ export async function updateLogoTask(
     .update(logoTask)
     .set({ ...updates, updatedAt: new Date() })
     .where(eq(logoTask.id, id));
+}
+
+export async function getLogoTaskById(id: string) {
+  const db = await getDb();
+  const rows = await db.select().from(logoTask).where(eq(logoTask.id, id));
+  return rows[0] ?? null;
 }
 
 export interface AppendTaskLogParams {
