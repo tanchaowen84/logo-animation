@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     'svg-path-bounds',
     'normalize-svg-path',
     'svg-arc-to-cubic-bezier',
+    '@remotion/renderer',
   ],
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console

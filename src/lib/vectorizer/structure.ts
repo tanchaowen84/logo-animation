@@ -1,4 +1,4 @@
-import { parseSync, type Node } from 'svgson';
+import { parseSync, type INode } from 'svgson';
 import { nanoid } from 'nanoid';
 import svgPathBounds from 'svg-path-bounds';
 
@@ -44,7 +44,7 @@ function computePathMetrics(d: string): { bbox: BBox; area: number; pathLength: 
   }
 }
 
-function mapNode(node: Node, inheritedId?: string): StructuredSvgNode {
+function mapNode(node: INode, inheritedId?: string): StructuredSvgNode {
   const id = node.attributes.id ?? inheritedId ?? `node_${nanoid(8)}`;
   const type = node.name;
   const attributes = node.attributes ?? {};
@@ -72,7 +72,7 @@ function mapNode(node: Node, inheritedId?: string): StructuredSvgNode {
   }
 
   if (node.children && node.children.length > 0) {
-    structured.children = node.children.map((child) => mapNode(child));
+    structured.children = node.children.map((child: INode) => mapNode(child));
   }
 
   return structured;

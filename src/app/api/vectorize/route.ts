@@ -1,8 +1,12 @@
 import { labelSvgElements } from '@/lib/ai/vector-labeler';
+import { createLogoTask, appendLogoTaskLog } from '@/lib/logo-tasks';
 import { vectorizeLogoFromBuffer } from '@/lib/vectorizer/logo';
 import { bufferToPngDataUrl } from '@/lib/vectorizer/image';
 import { parseSvgForLabeling, applySemanticLabelsToSvg } from '@/lib/vectorizer/svg';
 import type { SvgLabelResponse } from '@/lib/vectorizer/types';
+import { uploadFile } from '@/storage';
+import { StorageError } from '@/storage/types';
+import { randomUUID } from 'crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -43,6 +47,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    const taskId = randomUUID();
     const result = await vectorizeLogoFromBuffer(buffer);
 
     const nodes = parseSvgForLabeling(result.svg);
@@ -77,12 +82,76 @@ export async function POST(request: NextRequest) {
       console.warn('OPENROUTER_API_KEY not set, skipping semantic labeling.');
     }
 
-    return NextResponse.json({
-      ...responsePayload,
-      width: result.width,
-      height: result.height,
-      originalFormat: result.originalFormat,
-    });
+    const storageFolder = `logo-tasks/${taskId}`;
+
+    const originalFileName =
+      (file as File).name && (file as File).name.length > 0
+        ? (file as File).name
+        : `logo.${result.originalFormat ?? 'png'}`;
+    const originalFileType = (file as File).type || 'application/octet-stream';
+
+    try {
+      const [originalUpload, vectorizedUpload] = await Promise.all([
+        uploadFile(buffer, originalFileName, originalFileType, storageFolder),
+        uploadFile(
+          Buffer.from(responsePayload.svg, 'utf-8'),
+          `${taskId}.svg`,
+          'image/svg+xml',
+          storageFolder
+        ),
+      ]);
+
+      await createLogoTask({
+        id: taskId,
+        original: originalUpload,
+        vectorized: vectorizedUpload,
+        vectorizedSvg: responsePayload.svg,
+        labels: responsePayload.labels,
+        width: result.width,
+        height: result.height,
+        originalFormat: result.originalFormat,
+        metadata: {
+          sourceFileName: originalFileName,
+          fileSize: file.size,
+          hasLabels: responsePayload.labels.length > 0,
+        },
+      });
+
+      await appendLogoTaskLog({
+        taskId,
+        level: 'info',
+        message: 'Logo vectorization completed',
+        details: {
+          width: result.width,
+          height: result.height,
+          originalFormat: result.originalFormat,
+          labelsCount: responsePayload.labels.length,
+        },
+      });
+
+      return NextResponse.json({
+        taskId,
+        ...responsePayload,
+        width: result.width,
+        height: result.height,
+        originalFormat: result.originalFormat,
+        originalFile: originalUpload,
+        vectorizedFile: vectorizedUpload,
+      });
+    } catch (error) {
+      console.error('Failed to persist logo task:', error);
+      if (error instanceof StorageError) {
+        return badRequest(
+          'File storage is not configured correctly. Please contact support.',
+          500
+        );
+      }
+
+      return badRequest(
+        error instanceof Error ? error.message : 'Failed to persist logo task',
+        500
+      );
+    }
   } catch (error) {
     console.error('Vectorize error:', error);
     return badRequest(

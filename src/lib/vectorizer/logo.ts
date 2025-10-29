@@ -1,4 +1,5 @@
-import { ColorMode, Hierarchical, PathSimplifyMode, vectorize } from '@neplex/vectorizer';
+import { vectorize } from '@neplex/vectorizer';
+import type { Config } from '@neplex/vectorizer';
 import sharp from 'sharp';
 
 export interface VectorizeLogoOptions {
@@ -37,13 +38,17 @@ export async function vectorizeLogoFromBuffer(
     .png()
     .toBuffer({ resolveWithObject: true });
 
+  const COLOR_MODE_COLOR = 0 as Config['colorMode'];
+  const HIERARCHICAL_STACKED = 0 as Config['hierarchical'];
+  const PATH_SIMPLIFY_SPLINE = 2 as Config['mode'];
+
   const svg = await vectorize(optimized, {
-    colorMode: ColorMode.Color,
-    hierarchical: Hierarchical.Stacked,
+    colorMode: COLOR_MODE_COLOR,
+    hierarchical: HIERARCHICAL_STACKED,
     filterSpeckle: 4,
     colorPrecision: 8,
     layerDifference: 6,
-    mode: PathSimplifyMode.Spline,
+    mode: PATH_SIMPLIFY_SPLINE,
     cornerThreshold: 60,
     lengthThreshold: 4,
     maxIterations: 2,

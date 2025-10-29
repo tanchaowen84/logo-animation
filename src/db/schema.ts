@@ -1,4 +1,5 @@
 import { boolean, pgTable, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -87,4 +88,31 @@ export const creditsHistory = pgTable("credits_history", {
 	creemOrderId: text('creem_order_id'),
 	createdAt: timestamp('created_at').notNull().defaultNow(),
 	metadata: jsonb('metadata').default('{}'),
+});
+
+export const logoTask = pgTable("logo_task", {
+	id: text('id').primaryKey(),
+	userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+	status: text('status').notNull().default('vectorized'),
+	originalFileKey: text('original_file_key').notNull(),
+	originalFileUrl: text('original_file_url'),
+	vectorizedFileKey: text('vectorized_file_key'),
+	vectorizedFileUrl: text('vectorized_file_url'),
+	vectorizedSvg: text('vectorized_svg'),
+	labels: jsonb('labels').$type<Array<Record<string, unknown>> | null>().default(sql`'[]'::jsonb`),
+	width: integer('width'),
+	height: integer('height'),
+	originalFormat: text('original_format'),
+	metadata: jsonb('metadata').default(sql`'{}'::jsonb`),
+	createdAt: timestamp('created_at').notNull().defaultNow(),
+	updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const logoTaskLog = pgTable("logo_task_log", {
+	id: text('id').primaryKey(),
+	taskId: text('task_id').notNull().references(() => logoTask.id, { onDelete: 'cascade' }),
+	level: text('level').notNull(),
+	message: text('message').notNull(),
+	details: jsonb('details').default(sql`'{}'::jsonb`),
+	createdAt: timestamp('created_at').notNull().defaultNow(),
 });
