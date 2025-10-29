@@ -76,3 +76,52 @@ AI 标注环境变量
 - `OPENROUTER_API_BASE_URL`：可选，自定义网关地址，默认 `https://openrouter.ai/api/v1`。
 - `OPENROUTER_HTTP_REFERER` / `OPENROUTER_HTTP_TITLE`：可选，用于 OpenRouter 排名统计。
 - `OPENROUTER_LOGO_LABEL_MODEL`：可选，指定使用的模型名称，默认 `google/gemini-2.5-flash`。
+
+下一阶段实现计划（Remotion 集成）
+1. 安装官方建议依赖  
+   - 锁定版本安装 `remotion`、`@remotion/cli`，在 `package.json` 中新增 `remotion:studio`、`remotion:render` 等脚本。
+   - 可选：安装 `@remotion/eslint-plugin`，并针对 `remotion/` 目录启用规则。
+
+2. 建立 Remotion 目录结构  
+   - 新建 `remotion/` 目录，包含：
+     - `Root.tsx` 或 `RemotionRoot.tsx`：集中注册 `<Composition>`。
+     - `index.ts`: 调用 `registerRoot(RemotionRoot)`。
+     - `generated/LogoAnimation.tsx`: AI 生成代码落地文件；初始可写占位组件。
+
+3. 编写最小占位 Composition 验证渲染链路  
+   - 在 `RemotionRoot` 中注册一个占位组件（简单的文字或空组件），通过 `pnpm remotion:studio` 与 `pnpm remotion:render` 验证工具链可运行。
+
+4. 整理 AI 生成代码的提示与接口  
+   - 阅读 `remotion-system-prompt.md`，结合语义标签 JSON，定义调用 OpenRouter 时的 `system`/`user` 消息结构与输出要求（合法 TSX、导出组件等）。
+
+5. （待骨架完成后）串联 AI → Remotion → 渲染
+   - 新建 API / server action 调用 OpenRouter 生成 TSX 写入 `generated/LogoAnimation.tsx`。
+   - 触发 Remotion 渲染（CLI 或 Node API），记录产物与异常，前端接入生成按钮与预览。
+
+功能实现细化步骤
+- 任务与素材管理  
+  1. 上传完成后生成 `taskId`，保存原图、矢量 SVG、语义标签（数据库）。  
+  2. 提供 `GET /api/tasks/:id` 返回任务详情，为后续生成动画复用。
+
+- AI 动画生成 API  
+  1. 新建 `POST /api/tasks/:id/generate-animation`：读取任务数据 → 组织提示词 → 调用 OpenRouter。  
+  2. 解析返回的 Remotion TSX，写入 `remotion/generated/${taskId}.tsx`；记录输出与日志。
+
+- 代码编译与快速校验  
+  1. 对生成文件运行 `pnpm exec tsc --noEmit` 或 ESLint，仅检查 `remotion` 目录，捕获语法错误。  
+  2. 若失败，返回错误信息给前端，并保留生成的原始代码供调试。
+
+- 视频预览与渲染  
+  1. 成功生成组件后，调用 `remotion render remotion/index.ts taskId out/<taskId>.webm`（或使用 `@remotion/renderer` Node API）。  
+  2. 渲染完成后保存视频文件路径，更新任务状态；失败则写入失败日志。
+
+- 前端交互  
+  1. 在仪表板或上传完成页提供“生成动画”按钮，调用上面 API，显示生成进度。  
+  2. 提供预览播放器（Remotion Player 或视频标签）展示生成结果，并允许重新生成。
+
+数据库现状与扩展计划
+- 当前 `src/db/schema.ts` 仅包含用户鉴权与支付相关表：`user`、`session`、`account`、`verification`、`payment`、`creditsHistory`。  
+- 尚未创建 Logo 动画任务相关表，后续接入 Supabase 时需新增，例如：  
+  - `logo_task`：存储任务元信息（原始图片路径、矢量 SVG、语义标签 JSON、AI 生成代码路径、渲染视频路径、任务状态、关联用户等）。  
+  - `logo_task_log`：记录各环节日志与错误，便于调试与重试。  
+- 按现有 Drizzle 模式定义表结构，并通过 Supabase 迁移/连接，保持与既有 ORM 一致性。
