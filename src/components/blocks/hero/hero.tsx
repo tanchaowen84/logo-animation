@@ -17,7 +17,8 @@ interface LogoTaskRecord {
   compositionWidth: number | null;
   compositionHeight: number | null;
   compositionProps: Record<string, unknown> | null;
-  animationFilePath: string | null;
+  animationModuleUrl: string | null;
+  animationModuleKey: string | null;
   renderedVideoKey: string | null;
   renderedVideoUrl: string | null;
   renderedAt: string | null;
@@ -40,9 +41,9 @@ interface GenerateAnimationResponse {
   durationInFrames: number;
   fps: number;
   props?: Record<string, unknown>;
-  animationFilePath: string;
   width?: number;
   height?: number;
+  animationModuleUrl: string;
 }
 
 interface RenderTaskResponse {
@@ -182,6 +183,7 @@ export default function HeroSection() {
             label: string;
             reason?: string;
           }>;
+          vectorizedSvgKey?: string;
         };
 
         setSvgResult(data.svg);
@@ -289,9 +291,9 @@ export default function HeroSection() {
         durationInFrames: data.durationInFrames,
         fps: data.fps,
         props: data.props,
-        animationFilePath: data.animationFilePath,
         width: data.width,
         height: data.height,
+        animationModuleUrl: data.animationModuleUrl,
       });
       toast.success('AI 已生成动画代码');
       void fetchTaskStatus(taskId);
@@ -614,6 +616,19 @@ export default function HeroSection() {
                                           2
                                         )}
                                       </pre>
+                                      {(generationResult?.animationModuleUrl ?? taskInfo?.animationModuleUrl) && (
+                                        <div className="mt-2 text-xs text-muted-foreground">
+                                          源码位置：{' '}
+                                          <a
+                                            href={generationResult?.animationModuleUrl ?? taskInfo?.animationModuleUrl ?? undefined}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-primary underline-offset-4 hover:underline"
+                                          >
+                                            打开 TSX
+                                          </a>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -636,12 +651,16 @@ export default function HeroSection() {
                                   disabled={
                                     isRendering ||
                                     taskStatus === 'rendering' ||
-                                    !taskInfo?.compositionId
+                                    !taskInfo?.compositionId ||
+                                    !taskInfo?.animationModuleUrl
                                   }
                                   className={cn(
                                     'inline-flex items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition-colors',
                                     'border-border hover:border-primary hover:text-primary',
-                                    (isRendering || taskStatus === 'rendering' || !taskInfo?.compositionId) &&
+                                    (isRendering ||
+                                      taskStatus === 'rendering' ||
+                                      !taskInfo?.compositionId ||
+                                      !taskInfo?.animationModuleUrl) &&
                                       'pointer-events-none opacity-60'
                                   )}
                                 >

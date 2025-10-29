@@ -1,11 +1,11 @@
 import { appendLogoTaskLog, getLogoTaskById, updateLogoTask } from '@/lib/logo-tasks';
 import { getOpenRouterClient } from '@/lib/ai';
-import { upsertManifestEntry } from '@/lib/remotion/manifest';
-import { invalidateRemotionBundle } from '@/lib/remotion/bundle';
-import fs from 'fs/promises';
-import path from 'path';
 import { NextResponse, type NextRequest } from 'next/server';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import ts from 'typescript';
+import { uploadFile } from '@/storage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -24,7 +24,6 @@ interface AnimationModelResponse {
   height?: number;
 }
 
-const GENERATED_DIR = path.join(process.cwd(), 'remotion', 'generated');
 const REMOTION_PROMPT_PATH = path.join(process.cwd(), 'remotion-system-prompt.md');
 let cachedSystemPrompt: string | null = null;
 
@@ -81,17 +80,6 @@ function parseModelResponse(content: string): AnimationModelResponse {
   return parsed;
 }
 
-async function ensureGeneratedDir() {
-  await fs.mkdir(GENERATED_DIR, { recursive: true });
-}
-
-async function writeAnimationFile(taskId: string, tsxSource: string): Promise<string> {
-  await ensureGeneratedDir();
-  const filePath = path.join(GENERATED_DIR, `${taskId}.tsx`);
-  await fs.writeFile(filePath, tsxSource, 'utf-8');
-  return filePath;
-}
-
 function getTsConfig(): { options: ts.CompilerOptions; fileNames: string[] } {
   const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
   if (!configPath) {
@@ -112,7 +100,19 @@ function getTsConfig(): { options: ts.CompilerOptions; fileNames: string[] } {
 
 function validateTsxFile(filePath: string) {
   const { options } = getTsConfig();
-  const program = ts.createProgram({ rootNames: [filePath], options });
+  const program = ts.createProgram({
+    rootNames: [filePath],
+    options: {
+      ...options,
+      incremental: false,
+      composite: false,
+      tsBuildInfoFile: undefined,
+      outDir: undefined,
+      declaration: false,
+      emitDeclarationOnly: false,
+      noEmit: true,
+    },
+  });
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length > 0) {
     const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, {
@@ -126,38 +126,36 @@ function validateTsxFile(filePath: string) {
 
 function buildUserPrompt({
   taskId,
-  svg,
   labels,
   width,
   height,
   originalFormat,
-  vectorizedFileUrl,
+  vectorizedSvgUrl,
   instructions,
 }: {
   taskId: string;
-  svg: string;
   labels: unknown;
   width: number | null;
   height: number | null;
   originalFormat: string | null;
-  vectorizedFileUrl: string | null;
+  vectorizedSvgUrl: string | null;
   instructions?: string;
 }): string {
   const metadata = {
     taskId,
     dimensions: { width, height },
     originalFormat,
-    vectorizedFileUrl,
+    vectorizedSvgUrl,
     labels,
   };
 
   return [
     '请根据以下任务上下文生成 Remotion 动画组件，输出 JSON 对象 {"tsx": string, "compositionId": string, "durationInFrames": number, "fps": number, "props"?: object, "width"?: number, "height"?: number }。',
-    '编写的 TSX 必须：\n- 仅使用 remotion 官方导出的 API；\n- 默认导出名为 LogoAnimation 的 React 组件；\n- 组件 props 需要通过声明 `export interface LogoAnimationProps` 并与 props JSON 对应；\n- 不使用项目别名导入（避免 @/ 前缀），可以自由创建内部辅助函数；\n- 不要引用浏览器或 Node 特定的全局对象（如 window/document/process）；\n- 不使用随机数或当前时间，保持确定性。',
+    '编写的 TSX 必须：\n- 仅使用 remotion 官方导出的 API；\n- 默认导出名为 LogoAnimation 的 React 组件；\n- 组件 props 需要通过声明 `export interface LogoAnimationProps` 并与 props JSON 对应；\n- 不使用项目别名导入（避免 @/ 前缀），可以自由创建内部辅助函数；\n- 不要引用浏览器或 Node 特定的全局对象（如 window/document/process）；\n- 不使用随机数或当前时间，保持确定性；\n- 不要直接内联原始 SVG。',
+    '矢量化结果已存储在云端：如需查看原始分层 SVG，请访问 metadata.vectorizedSvgUrl。你可以根据语义标签抽象出动效，不要在 TSX 中粘贴 SVG 源代码。',
     '渲染时将把该文件注册为 composition，compositionId 建议为 `LogoAnimation_' + taskId + '`，默认画布大小 1920×1080、FPS 30，可根据需要调整并体现在返回的 JSON 中。',
     instructions ? `额外要求：${instructions}` : '没有额外要求。',
     `任务元数据：\n${JSON.stringify(metadata, null, 2)}`,
-    '矢量化 SVG：```svg\n' + svg + '\n```',
   ].join('\n\n');
 }
 
@@ -182,7 +180,7 @@ export async function POST(
       return NextResponse.json({ error: '未找到对应任务' }, { status: 404 });
     }
 
-    if (!task.vectorizedSvg) {
+    if (!task.vectorizedFileUrl) {
       return NextResponse.json({ error: '任务尚未完成矢量化，无法生成动画。' }, { status: 400 });
     }
 
@@ -190,12 +188,11 @@ export async function POST(
 
     const prompt = buildUserPrompt({
       taskId,
-      svg: task.vectorizedSvg,
       labels: task.labels,
       width: task.width,
       height: task.height,
       originalFormat: task.originalFormat,
-      vectorizedFileUrl: task.vectorizedFileUrl,
+      vectorizedSvgUrl: task.vectorizedFileUrl,
       instructions: body.instructions,
     });
 
@@ -228,57 +225,59 @@ export async function POST(
     const compositionWidth = Math.round(modelResult.width ?? 1920);
     const compositionHeight = Math.round(modelResult.height ?? 1080);
 
-    const filePath = await writeAnimationFile(taskId, modelResult.tsx);
-    validateTsxFile(filePath);
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `remotion-code-${taskId}-`));
+    const tempFilePath = path.join(tempDir, `${taskId}.tsx`);
 
-    await updateLogoTask(taskId, {
-      status: 'awaiting_render',
-      compositionId: modelResult.compositionId,
-      compositionDurationInFrames: modelResult.durationInFrames,
-      compositionFps: modelResult.fps,
-      compositionWidth,
-      compositionHeight,
-      compositionProps: modelResult.props ?? {},
-      animationFilePath: path.relative(process.cwd(), filePath),
-    });
+    try {
+      await fs.writeFile(tempFilePath, modelResult.tsx, 'utf-8');
+      validateTsxFile(tempFilePath);
 
-    const modulePath = path
-      .relative(path.join(process.cwd(), 'remotion', 'generated'), filePath)
-      .replace(/\\/g, '/');
-    await upsertManifestEntry({
-      taskId,
-      compositionId: modelResult.compositionId,
-      modulePath,
-      durationInFrames: modelResult.durationInFrames,
-      fps: modelResult.fps,
-      width: compositionWidth,
-      height: compositionHeight,
-      defaultProps: modelResult.props ?? {},
-    });
-    invalidateRemotionBundle();
+      const moduleFolder = `logo-tasks/${taskId}/animation`;
+      const moduleUpload = await uploadFile(
+        Buffer.from(modelResult.tsx, 'utf-8'),
+        `${taskId}.tsx`,
+        'text/plain',
+        moduleFolder
+      );
 
-    await appendLogoTaskLog({
-      taskId,
-      level: 'info',
-      message: 'AI 已生成动画代码',
-      details: {
-        model,
+      await updateLogoTask(taskId, {
+        status: 'awaiting_render',
+        compositionId: modelResult.compositionId,
+        compositionDurationInFrames: modelResult.durationInFrames,
+        compositionFps: modelResult.fps,
+        compositionWidth,
+        compositionHeight,
+        compositionProps: modelResult.props ?? {},
+        animationModuleUrl: moduleUpload.url,
+        animationModuleKey: moduleUpload.key,
+      });
+
+      await appendLogoTaskLog({
+        taskId,
+        level: 'info',
+        message: 'AI 已生成动画代码',
+        details: {
+          model,
+          compositionId: modelResult.compositionId,
+          durationInFrames: modelResult.durationInFrames,
+          fps: modelResult.fps,
+          moduleKey: moduleUpload.key,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
         compositionId: modelResult.compositionId,
         durationInFrames: modelResult.durationInFrames,
         fps: modelResult.fps,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      compositionId: modelResult.compositionId,
-      durationInFrames: modelResult.durationInFrames,
-      fps: modelResult.fps,
-      props: modelResult.props ?? {},
-      animationFilePath: path.relative(process.cwd(), filePath),
-      width: compositionWidth,
-      height: compositionHeight,
-    });
+        props: modelResult.props ?? {},
+        width: compositionWidth,
+        height: compositionHeight,
+        animationModuleUrl: moduleUpload.url,
+      });
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '生成动画失败';
     await appendLogoTaskLog({

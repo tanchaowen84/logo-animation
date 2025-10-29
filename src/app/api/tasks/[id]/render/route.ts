@@ -1,5 +1,6 @@
 import { appendLogoTaskLog, getLogoTaskById, updateLogoTask } from '@/lib/logo-tasks';
-import { renderComposition } from '@/lib/remotion/bundle';
+import { renderComposition, invalidateRemotionBundle } from '@/lib/remotion/bundle';
+import { ensureManifestFiles, removeManifestEntry, upsertManifestEntry } from '@/lib/remotion/manifest';
 import fs from 'fs/promises';
 import path from 'path';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -24,15 +25,43 @@ export async function POST(
     return NextResponse.json({ error: '未找到对应任务' }, { status: 404 });
   }
 
-  if (!task.compositionId || !task.animationFilePath) {
+  if (!task.compositionId || !task.animationModuleUrl) {
     return NextResponse.json({ error: '该任务尚未生成动画代码，无法渲染。' }, { status: 400 });
   }
 
   const compositionProps = (task.compositionProps ?? {}) as Record<string, unknown>;
   let tempOutputPath: string | null = null;
+  let localModulePath: string | null = null;
 
   try {
     await updateLogoTask(taskId, { status: 'rendering' });
+
+    const generatedDir = path.join(process.cwd(), 'remotion', 'generated');
+    await fs.mkdir(generatedDir, { recursive: true });
+    await ensureManifestFiles();
+
+    localModulePath = path.join(generatedDir, `${taskId}.tsx`);
+    const moduleResponse = await fetch(task.animationModuleUrl);
+    if (!moduleResponse.ok) {
+      throw new Error('无法下载动画组件源码');
+    }
+    const moduleSource = await moduleResponse.text();
+    await fs.writeFile(localModulePath, moduleSource, 'utf-8');
+
+    const moduleRelativePath = path
+      .relative(generatedDir, localModulePath)
+      .replace(/\\/g, '/');
+    await upsertManifestEntry({
+      taskId,
+      compositionId: task.compositionId,
+      modulePath: moduleRelativePath,
+      durationInFrames: task.compositionDurationInFrames ?? 150,
+      fps: task.compositionFps ?? 30,
+      width: task.compositionWidth ?? 1920,
+      height: task.compositionHeight ?? 1080,
+      defaultProps: (task.compositionProps ?? {}) as Record<string, unknown>,
+    });
+    invalidateRemotionBundle();
 
     const renderResult = await renderComposition({
       compositionId: task.compositionId,
@@ -102,6 +131,17 @@ export async function POST(
           console.warn('清理渲染临时文件失败:', cleanupError);
         }
       }
+    }
+    if (localModulePath) {
+      try {
+        await fs.rm(localModulePath, { force: true });
+      } catch (cleanupError) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('删除临时动画模块失败:', cleanupError);
+        }
+      }
+      await removeManifestEntry(taskId).catch(() => {});
+      invalidateRemotionBundle();
     }
   }
 }

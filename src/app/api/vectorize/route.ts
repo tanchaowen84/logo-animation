@@ -91,21 +91,30 @@ export async function POST(request: NextRequest) {
     const originalFileType = (file as File).type || 'application/octet-stream';
 
     try {
+      const originalUploadPromise = uploadFile(
+        buffer,
+        originalFileName,
+        originalFileType,
+        storageFolder
+      );
+      const vectorizedUploadPromise = uploadFile(
+        Buffer.from(responsePayload.svg, 'utf-8'),
+        `${taskId}.svg`,
+        'image/svg+xml',
+        storageFolder
+      );
+
       const [originalUpload, vectorizedUpload] = await Promise.all([
-        uploadFile(buffer, originalFileName, originalFileType, storageFolder),
-        uploadFile(
-          Buffer.from(responsePayload.svg, 'utf-8'),
-          `${taskId}.svg`,
-          'image/svg+xml',
-          storageFolder
-        ),
+        originalUploadPromise,
+        vectorizedUploadPromise,
       ]);
 
       await createLogoTask({
         id: taskId,
         original: originalUpload,
         vectorized: vectorizedUpload,
-        vectorizedSvg: responsePayload.svg,
+        vectorizedSvg: null,
+        vectorizedSvgKey: vectorizedUpload.key,
         labels: responsePayload.labels,
         width: result.width,
         height: result.height,
@@ -137,6 +146,7 @@ export async function POST(request: NextRequest) {
         originalFormat: result.originalFormat,
         originalFile: originalUpload,
         vectorizedFile: vectorizedUpload,
+        vectorizedSvgKey: vectorizedUpload.key,
       });
     } catch (error) {
       console.error('Failed to persist logo task:', error);

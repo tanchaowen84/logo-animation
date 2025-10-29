@@ -24,6 +24,7 @@ export interface CreateLogoTaskParams {
   original: LogoTaskFileRef;
   vectorized?: LogoTaskFileRef | null;
   vectorizedSvg?: string | null;
+  vectorizedSvgKey?: string | null;
   labels?: Array<Record<string, unknown>>;
   width?: number | null;
   height?: number | null;
@@ -48,6 +49,12 @@ export async function createLogoTask(
     vectorizedFileKey: params.vectorized?.key ?? null,
     vectorizedFileUrl: params.vectorized?.url ?? null,
     vectorizedSvg: params.vectorizedSvg ?? null,
+    metadata: {
+      ...(params.metadata ?? {}),
+      ...(params.vectorizedSvgKey
+        ? { vectorizedSvgKey: params.vectorizedSvgKey }
+        : {}),
+    },
     labels: params.labels ?? [],
     width: params.width ?? null,
     height: params.height ?? null,
@@ -58,11 +65,11 @@ export async function createLogoTask(
     compositionWidth: null,
     compositionHeight: null,
     compositionProps: {},
-    animationFilePath: null,
+    animationModuleUrl: null,
+    animationModuleKey: null,
     renderedVideoKey: null,
     renderedVideoUrl: null,
     renderedAt: null,
-    metadata: params.metadata ?? {},
   };
 
   await db.insert(logoTask).values(row);
