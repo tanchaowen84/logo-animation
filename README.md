@@ -12,6 +12,54 @@ Logo Animation — MVP
 
 市场上第一个用户高自由度的、不依赖于模板的、注重设计感的 logo animation 设计 agent——解决现有模板预设无法满足各个 logo 的品牌化与设计感定制的问题。
 
+## SVG Runtime & AI 生成动画规划
+
+### 现有痛点
+
+1. **模型无法直接操控真实 SVG**：当前只把 `vectorizedSvgUrl` 传给模型，它既看不到 SVG 层级结构，也没有 API 可以定位某个 path，导致生成的 TSX 只能写占位内容或干脆内联整段 SVG。
+2. **生成代码易失效**：Remotion 运行在 Node 环境，常见的浏览器 SVG 库不可用；模型自己拼 `fetch + DOMParser` 容易失败，最终无法渲染。
+3. **缺乏提示与约束**：现有 prompt 只包含 Remotion 官方说明，没有我们自定义的规范（例如必须显式声明 props、统一使用单引号、禁止内联原始 SVG 等）。
+
+### 目标
+
+- 构建一套在 Remotion 环境下可运行的 **SVG 动画运行时工具箱**，让模型能按 path ID / label 自由操控真实 SVG 元素。
+- 通过 JSON Schema 与自定义 prompt 约束模型输出，保证生成的 TSX 合法、可编译、可渲染。
+- 保持“非模板化”定位：模型仍旧编写 TSX，只是通过我们提供的 API 来操作真实素材。
+
+### Runtime 工具设计
+
+| 模块 | 作用 | 说明 |
+| --- | --- | --- |
+| `loadSvgSource(vectorizedSvgUrl)` | 远程下载 SVG 字符串 | 负责请求、异常处理，兼容 Node 环境 |
+| `parseSvgToLayers(svg)` | 解析 SVG → Layer JSON | 使用 `svgson` 等库，保留 id、label、d、fill、bbox 等属性 |
+| `useSvgLayers({ vectorizedSvgUrl })` | 核心 Hook，提供查询 | 内部调用 load+parse，返回 `all`、`byId`, `byLabel` 等方法 |
+| `<SvgCanvas layers={...}>` | 输出 `<svg>` + `<path>` | 渲染真实 SVG 结构，保证模型可以在 JSX 中遍历、套 Remotion 动画 |
+
+> 以上四项是“必须”实现的运行时层。其余动画效果（`spring`、`interpolate`、`Sequence` 等）直接使用 Remotion 原生 API，模型可自由组合。若后续发现高频的动画模式，再根据需要补充可选 helper。
+
+> 借助以上工具，模型可以在 TSX 中直接调用这些 API，而我们负责底层解析与动画执行。
+
+### 模型提示策略
+
+1. 在现有 `remotion-system-prompt.md` 之后追加自定义说明：如何使用 `useSvgLayers`、`<SvgCanvas>`、`<AnimatePath>`，并明确禁止内联 SVG、要求 props 使用单引号、导出 `LogoAnimation` 等。
+2. 使用 `response_format: json_schema`，确保模型返回的 JSON 字段完整且可解析。
+3. 必要时提供一个最小示例（非模板，仅示范 API 用法），帮助模型理解如何调用我们的工具箱。
+
+### 与渲染管线的整合
+
+1. **生成阶段**：AI 输出 TSX → 写入 `remotion/.temp/<taskId>/` → 类型检查（强制 NodeNext 模块解析）→ 上传到 R2（保存 `animationModuleUrl`）。
+2. **渲染阶段**：下载 TSX → 写入 `remotion/generated/` 并更新 manifest → 调用 Remotion 渲染 → 上传视频 → 清理临时文件、刷新 bundle。
+3. **调试工具**：前端提供 SSE 调试面板，实时查看模型输出，便于迭代 prompt。
+
+### 分阶段落地计划
+
+1. **Runtime 初版**：实现 `loadSvgSource`、`parseSvgToLayers`、`useSvgLayers`、`<SvgCanvas>` 四个核心模块，验证 Remotion 中能正确渲染真实 SVG。
+2. **Prompt 更新**：把运行时 API 说明追加到系统提示中，保持 JSON Schema 约束。
+3. **生成/渲染联调**：确保模型生成的 TSX 可以调用新 runtime，并在渲染阶段操控真实 SVG。
+4. **迭代扩展（可选）**：在不限制模型自由的前提下按需提供 helper（例如常见动画原语、Timeline DSL、bbox 规则等）。
+
+> 以上规划确保模型既有充分自由度，又能稳定地对真实 Logo 执行动画，是“非模板化”定位的核心前提。
+
 制作流程（业务层细节，不涉技术实现）
 	1.	上传与准备
 	•	使用 vTracer (vTrace) 在上传后完成位图矢量化与自动去底；收集品牌参数（主辅色、节奏、气质关键词、用途场景）。
