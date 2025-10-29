@@ -1,5 +1,3 @@
-import { bundle } from '@remotion/bundler';
-import { renderMedia, selectComposition } from '@remotion/renderer';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -9,6 +7,22 @@ const REMOTION_ENTRY = path.join(process.cwd(), 'remotion', 'index.ts');
 
 let cachedServeUrl: string | null = null;
 let bundlingPromise: Promise<string> | null = null;
+let bundlerModulePromise: Promise<typeof import('@remotion/bundler')> | null = null;
+let rendererModulePromise: Promise<typeof import('@remotion/renderer')> | null = null;
+
+async function importBundler(): Promise<typeof import('@remotion/bundler')> {
+  if (!bundlerModulePromise) {
+    bundlerModulePromise = import('@remotion/bundler');
+  }
+  return bundlerModulePromise;
+}
+
+async function importRenderer(): Promise<typeof import('@remotion/renderer')> {
+  if (!rendererModulePromise) {
+    rendererModulePromise = import('@remotion/renderer');
+  }
+  return rendererModulePromise;
+}
 
 export function invalidateRemotionBundle() {
   cachedServeUrl = null;
@@ -22,18 +36,21 @@ async function bundleProject(): Promise<string> {
 
   await ensureManifestFiles();
 
-  bundlingPromise = bundle({
-    entryPoint: REMOTION_ENTRY,
-    onProgress: (progress) => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[remotion] bundling progress: ${(progress * 100).toFixed(1)}%`);
-      }
-    },
-  });
+  bundlingPromise = importBundler().then(({ bundle }) =>
+    bundle({
+      entryPoint: REMOTION_ENTRY,
+      onProgress: (progress: number) => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[remotion] bundling progress: ${(progress * 100).toFixed(1)}%`);
+        }
+      },
+    })
+  );
 
   try {
-    cachedServeUrl = await bundlingPromise;
-    return cachedServeUrl;
+    const serveUrl = await bundlingPromise;
+    cachedServeUrl = serveUrl;
+    return serveUrl;
   } catch (error) {
     cachedServeUrl = null;
     bundlingPromise = null;
@@ -70,6 +87,7 @@ export async function renderComposition({
   codec = 'h264',
 }: RenderCompositionParams): Promise<RenderResult> {
   const serveUrl = await getServeUrl();
+  const { selectComposition, renderMedia } = await importRenderer();
   const composition = await selectComposition({
     serveUrl,
     id: compositionId,

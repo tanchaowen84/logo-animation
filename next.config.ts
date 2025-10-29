@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     'normalize-svg-path',
     'svg-arc-to-cubic-bezier',
     '@remotion/renderer',
+    '@remotion/bundler',
+    'esbuild',
   ],
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console
