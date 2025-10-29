@@ -1,7 +1,7 @@
 import { getDb } from '@/db';
 import { logoTask, logoTaskLog } from '@/db/schema';
 import type { InferInsertModel } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
 export type LogoTaskStatus =
@@ -84,6 +84,25 @@ export async function getLogoTaskById(id: string) {
   const db = await getDb();
   const rows = await db.select().from(logoTask).where(eq(logoTask.id, id));
   return rows[0] ?? null;
+}
+
+export async function getLogoTaskLogs(taskId: string, limit = 50) {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(logoTaskLog)
+    .where(eq(logoTaskLog.taskId, taskId))
+    .orderBy(desc(logoTaskLog.createdAt))
+    .limit(limit);
+  return rows;
+}
+
+export async function getLogoTaskWithLogs(taskId: string) {
+  const [task, logs] = await Promise.all([
+    getLogoTaskById(taskId),
+    getLogoTaskLogs(taskId),
+  ]);
+  return { task, logs };
 }
 
 export interface AppendTaskLogParams {
