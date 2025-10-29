@@ -11,9 +11,9 @@ export const maxDuration = 300;
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const taskId = params.id;
+  const { id: taskId } = await params;
 
   if (!taskId) {
     return NextResponse.json({ error: '缺少任务 ID' }, { status: 400 });
