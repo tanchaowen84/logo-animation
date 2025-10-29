@@ -2,10 +2,10 @@ import { appendLogoTaskLog, getLogoTaskById, updateLogoTask } from '@/lib/logo-t
 import { getOpenRouterClient } from '@/lib/ai';
 import { NextResponse, type NextRequest } from 'next/server';
 import fs from 'fs/promises';
-import os from 'os';
 import path from 'path';
 import ts from 'typescript';
 import { uploadFile } from '@/storage';
+import { buildAnimationPrompt, loadAnimationSystemPrompt } from '@/lib/remotion/prompt';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -22,22 +22,6 @@ interface AnimationModelResponse {
   props?: Record<string, unknown>;
   width?: number;
   height?: number;
-}
-
-const REMOTION_PROMPT_PATH = path.join(process.cwd(), 'remotion-system-prompt.md');
-let cachedSystemPrompt: string | null = null;
-
-async function loadSystemPrompt(): Promise<string> {
-  if (cachedSystemPrompt) {
-    return cachedSystemPrompt;
-  }
-  try {
-    const content = await fs.readFile(REMOTION_PROMPT_PATH, 'utf-8');
-    cachedSystemPrompt = `${content}\n\nFollow all instructions above. You must only output JSON as instructed by the user.`;
-    return cachedSystemPrompt;
-  } catch (error) {
-    throw new Error('无法读取 Remotion 系统提示，请确认 remotion-system-prompt.md 存在。');
-  }
 }
 
 function stripCodeFences(raw: string): string {
@@ -124,41 +108,6 @@ function validateTsxFile(filePath: string) {
   }
 }
 
-function buildUserPrompt({
-  taskId,
-  labels,
-  width,
-  height,
-  originalFormat,
-  vectorizedSvgUrl,
-  instructions,
-}: {
-  taskId: string;
-  labels: unknown;
-  width: number | null;
-  height: number | null;
-  originalFormat: string | null;
-  vectorizedSvgUrl: string | null;
-  instructions?: string;
-}): string {
-  const metadata = {
-    taskId,
-    dimensions: { width, height },
-    originalFormat,
-    vectorizedSvgUrl,
-    labels,
-  };
-
-  return [
-    '请根据以下任务上下文生成 Remotion 动画组件，输出 JSON 对象 {"tsx": string, "compositionId": string, "durationInFrames": number, "fps": number, "props"?: object, "width"?: number, "height"?: number }。',
-    '编写的 TSX 必须：\n- 仅使用 remotion 官方导出的 API；\n- 默认导出名为 LogoAnimation 的 React 组件；\n- 组件 props 需要通过声明 `export interface LogoAnimationProps` 并与 props JSON 对应；\n- 不使用项目别名导入（避免 @/ 前缀），可以自由创建内部辅助函数；\n- 不要引用浏览器或 Node 特定的全局对象（如 window/document/process）；\n- 不使用随机数或当前时间，保持确定性；\n- 不要直接内联原始 SVG。',
-    '矢量化结果已存储在云端：如需查看原始分层 SVG，请访问 metadata.vectorizedSvgUrl。你可以根据语义标签抽象出动效，不要在 TSX 中粘贴 SVG 源代码。',
-    '渲染时将把该文件注册为 composition，compositionId 建议为 `LogoAnimation_' + taskId + '`，默认画布大小 1920×1080、FPS 30，可根据需要调整并体现在返回的 JSON 中。',
-    instructions ? `额外要求：${instructions}` : '没有额外要求。',
-    `任务元数据：\n${JSON.stringify(metadata, null, 2)}`,
-  ].join('\n\n');
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -186,18 +135,20 @@ export async function POST(
 
     await updateLogoTask(taskId, { status: 'generating_animation' });
 
-    const prompt = buildUserPrompt({
+    const vectorizedSvgUrl = task.vectorizedFileUrl!;
+
+    const prompt = buildAnimationPrompt({
       taskId,
+      vectorizedSvgUrl,
       labels: task.labels,
       width: task.width,
       height: task.height,
       originalFormat: task.originalFormat,
-      vectorizedSvgUrl: task.vectorizedFileUrl,
       instructions: body.instructions,
     });
 
     const client = getOpenRouterClient();
-    const systemPrompt = await loadSystemPrompt();
+    const systemPrompt = await loadAnimationSystemPrompt();
     const model = process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'google/gemini-2.5-flash';
 
     const completion = await client.chat.completions.create({
@@ -225,7 +176,8 @@ export async function POST(
     const compositionWidth = Math.round(modelResult.width ?? 1920);
     const compositionHeight = Math.round(modelResult.height ?? 1080);
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `remotion-code-${taskId}-`));
+    const tempDir = path.join(process.cwd(), 'remotion', '.temp', taskId);
+    await fs.mkdir(tempDir, { recursive: true });
     const tempFilePath = path.join(tempDir, `${taskId}.tsx`);
 
     try {

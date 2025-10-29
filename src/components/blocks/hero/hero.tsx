@@ -79,6 +79,10 @@ export default function HeroSection() {
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderResult, setRenderResult] = useState<RenderTaskResponse | null>(null);
+  const [debugOutput, setDebugOutput] = useState('');
+  const [debugStatus, setDebugStatus] = useState<string>('尚未启动');
+  const [isDebugging, setIsDebugging] = useState(false);
+  const debugEventSourceRef = useRef<EventSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const uploadHintClassName = useMemo(
@@ -89,6 +93,69 @@ export default function HeroSection() {
       ),
     [isLoading]
   );
+
+  const stopDebugging = useCallback(() => {
+    if (debugEventSourceRef.current) {
+      debugEventSourceRef.current.close();
+      debugEventSourceRef.current = null;
+    }
+    setIsDebugging(false);
+  }, []);
+
+  const startDebugging = useCallback(() => {
+    if (!taskId) {
+      toast.error('请先上传 Logo 并完成矢量化');
+      return;
+    }
+
+    stopDebugging();
+    setDebugOutput('');
+    setDebugStatus('建立连接中...');
+    setIsDebugging(true);
+
+    const url = new URL(
+      `/api/tasks/${taskId}/generate-animation/debug`,
+      window.location.origin
+    );
+    if (instructions.trim().length > 0) {
+      url.searchParams.set('instructions', instructions);
+    }
+    url.searchParams.set('ts', Date.now().toString());
+
+    const eventSource = new EventSource(url.toString());
+    debugEventSourceRef.current = eventSource;
+
+    eventSource.addEventListener('status', (event) => {
+      setDebugStatus((event as MessageEvent).data ?? '');
+    });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const token = JSON.parse(event.data) as string;
+        setDebugOutput((prev) => prev + token);
+      } catch {
+        setDebugOutput((prev) => prev + event.data);
+      }
+    };
+
+    const handleError = (event?: MessageEvent) => {
+      const message = event?.data ? String(event.data) : '连接异常已断开';
+      setDebugStatus(`错误: ${message}`);
+      stopDebugging();
+    };
+
+    eventSource.addEventListener('error', (event) => {
+      handleError(event as MessageEvent);
+    });
+
+    eventSource.addEventListener('end', (event) => {
+      const data = (event as MessageEvent).data;
+      setDebugStatus(data === 'aborted' ? '已手动停止' : '模型输出完成');
+      stopDebugging();
+    });
+  }, [instructions, stopDebugging, taskId]);
+
+  useEffect(() => () => stopDebugging(), [stopDebugging]);
 
   const readableStatus = useMemo(() => {
     if (!taskStatus) return '—';
@@ -134,16 +201,19 @@ export default function HeroSection() {
       }
 
       if (!file.type.startsWith('image/')) {
-      setError('仅支持图片文件');
-      toast.error('请选择 PNG、JPEG 等图片格式');
-      return;
-    }
+        setError('仅支持图片文件');
+        toast.error('请选择 PNG、JPEG 等图片格式');
+        return;
+      }
 
       setIsLoading(true);
       setError(null);
       setSvgResult(null);
       setMeta(null);
       setLabels([]);
+      stopDebugging();
+      setDebugOutput('');
+      setDebugStatus('尚未启动');
       setTaskId(null);
       setTaskStatus(null);
       setTaskInfo(null);
@@ -210,7 +280,7 @@ export default function HeroSection() {
         setIsLoading(false);
       }
     },
-    [fetchTaskStatus]
+    [fetchTaskStatus, stopDebugging]
   );
 
   const handleFileInputChange = useCallback(
@@ -266,6 +336,9 @@ export default function HeroSection() {
     setGenerationResult(null);
 
     try {
+      setDebugStatus('已停止调试');
+      stopDebugging();
+
       const response = await fetch(`/api/tasks/${taskId}/generate-animation`, {
         method: 'POST',
         headers: {
@@ -305,7 +378,7 @@ export default function HeroSection() {
     } finally {
       setIsGenerating(false);
     }
-  }, [taskId, instructions, fetchTaskStatus]);
+  }, [taskId, instructions, fetchTaskStatus, stopDebugging]);
 
   const handleRenderVideo = useCallback(async () => {
     if (!taskId) {
@@ -580,6 +653,36 @@ export default function HeroSection() {
                                 {generationError && (
                                   <p className="text-xs text-destructive">{generationError}</p>
                                 )}
+                                <div className="rounded-lg border border-border/40 bg-background p-3 text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <div className="font-medium text-foreground">实时调试</div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (isDebugging) {
+                                          setDebugStatus('已手动停止');
+                                          stopDebugging();
+                                        } else {
+                                          startDebugging();
+                                        }
+                                      }}
+                                      disabled={!taskId}
+                                      className={cn(
+                                        'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                                        'border-border hover:border-primary hover:text-primary',
+                                        !taskId && 'pointer-events-none opacity-60'
+                                      )}
+                                    >
+                                      {isDebugging ? '停止调试' : '开始调试'}
+                                    </button>
+                                  </div>
+                                  <div className="mt-2 text-[11px] text-muted-foreground">
+                                    {debugStatus}
+                                  </div>
+                                  <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-border/30 bg-muted/20 p-2 text-[11px] leading-relaxed text-muted-foreground">
+                                    {debugOutput || '等待输出...'}
+                                  </pre>
+                                </div>
                                 {(generationResult || taskInfo?.compositionId) && (
                                   <div className="rounded-lg border border-border/50 bg-background p-3 text-xs">
                                     <div className="font-medium text-foreground">动画信息</div>
