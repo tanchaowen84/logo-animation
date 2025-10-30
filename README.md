@@ -113,7 +113,7 @@ Logo Animation — MVP
 3. 模型标注
    - 调用多模态大模型，请求按 `{id, label, reason}`（或约定格式）输出，不要求模型改写 SVG，只做语义命名。
    - 标签名称由模型根据原图与元素特征自行命名，必要时可约束输出格式或提供示例，但不预设固定集合。
-   - 通过 OpenRouter 提供的 API（例如 `google/gemini-2.5-flash`），以环境变量提供的 `OPENROUTER_API_KEY` 调用多模态模型；示例调用方式沿用 `openai.chat.completions.create` 并同时上传原图 URL 与结构化摘要。
+   - 通过 OpenRouter 提供的 API（例如 `minimax/minimax-m2`），以环境变量提供的 `OPENROUTER_API_KEY` 调用多模态模型；示例调用方式沿用 `openai.chat.completions.create` 并同时上传原图 URL 与结构化摘要。
 
 4. 标签写回
    - 根据模型返回结果，把语义标签写入原 SVG 的对应元素（例如 `<g data-layer="logomark">`），保持结构一致，便于动画引擎使用。
@@ -123,7 +123,7 @@ AI 标注环境变量
 - `OPENROUTER_API_KEY`：OpenRouter API 密钥（部署时填写，默认留空）。
 - `OPENROUTER_API_BASE_URL`：可选，自定义网关地址，默认 `https://openrouter.ai/api/v1`。
 - `OPENROUTER_HTTP_REFERER` / `OPENROUTER_HTTP_TITLE`：可选，用于 OpenRouter 排名统计。
-- `OPENROUTER_LOGO_LABEL_MODEL`：可选，指定使用的模型名称，默认 `google/gemini-2.5-flash`。
+- `OPENROUTER_LOGO_LABEL_MODEL`：可选，指定使用的模型名称，默认 `minimax/minimax-m2`。
 
 下一阶段实现计划（Remotion 集成）
 1. 安装官方建议依赖  

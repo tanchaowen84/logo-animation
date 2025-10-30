@@ -80,7 +80,7 @@ export async function GET(
         );
 
         const completion = await client.chat.completions.create({
-          model: process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'google/gemini-2.5-flash',
+          model: process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'minimax/minimax-m2',
           temperature: 0.2,
           response_format: {
             type: 'json_schema',

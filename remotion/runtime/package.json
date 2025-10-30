@@ -1,0 +1,8 @@
+{
+  "name": "@logo/runtime",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./index": "./index.ts"
+  }
+}

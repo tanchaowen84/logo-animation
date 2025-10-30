@@ -166,6 +166,70 @@ export const MyComp: React.FC = () => {
 };
 ```
 
+## 项目特定约束（Logo Animation Runtime）
+
+为了确保生成的动画组件可以直接运行在本项目的 Remotion 管线内，请在编写代码时遵守以下规则：
+
+1. 必须基于我们提供的运行时 API 操作真实 SVG：
+   - 默认从 `@runtime` 导入：`useSvgLayers`, `SvgCanvas`, 以及需要的类型（如 `SvgLayer`）。
+   - 组件加载后应调用 `const { status, error, collection, runtime } = useSvgLayers({ vectorizedSvgUrl });`。
+   - 根据 `status` 处理 `loading` / `error` 分支；成功后再渲染动画内容。
+   - 通过 `collection.byId(...)` 或 `collection.byLabel(...)` 精确定位需要动画的层；`byLabel` 始终返回数组，请使用解构或索引（例如 `const [logomark] = collection.byLabel('logomark') ?? [];`）。如需遍历，可使用 `collection.layers` 或 `runtime.mapLayers(...)`。
+
+2. 渲染 SVG 时应使用 `<SvgCanvas>`，通过 `renderLayer` 回调覆写每个元素的属性，避免内联原始 SVG 字符串或使用 `<img src={vectorizedSvgUrl}>` 之类的占位方案。
+
+3. 组件导出规范：
+   - 声明并导出 `export interface LogoAnimationProps { vectorizedSvgUrl: string; [可选 props] }`。
+   - 使用 `export const LogoAnimation: React.FC<LogoAnimationProps> = (...) => { ... }` 作为默认导出组件。
+   - 所有字符串与 JSX 属性统一使用单引号，避免 JSON 解析错误。
+
+4. Remotion 环境兼容性：
+   - 禁止引用 `window`、`document` 等浏览器特有对象。
+   - 允许使用 `AbsoluteFill`、`Sequence`、`spring`、`interpolate` 等 Remotion API 组合动画。
+
+5. 返回的 TSX 需要对不同的 SVG 层应用差异化动画；可利用 `layer.label`、`layer.bbox` 等信息控制时序、透明度、缩放或轨迹。
+
+### 最小示例（仅示意运行时代码结构，勿照搬设计）
+
+```tsx
+import React from 'react';
+import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+import { SvgCanvas, useSvgLayers, type SvgLayer } from '@runtime';
+
+export interface LogoAnimationProps {
+  vectorizedSvgUrl: string;
+}
+
+export const LogoAnimation: React.FC<LogoAnimationProps> = ({ vectorizedSvgUrl }) => {
+  const frame = useCurrentFrame();
+  const { status, error, collection } = useSvgLayers({ vectorizedSvgUrl });
+
+  if (status !== 'success' || !collection.document) {
+    return (
+      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
+        {status === 'error' ? error?.message ?? 'SVG 加载失败' : '加载中…'}
+      </AbsoluteFill>
+    );
+  }
+
+  const renderLayer = ({ layer }: { layer: SvgLayer }) => {
+    const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: 'clamp' });
+    return <path key={layer.id} {...layer.attributes} opacity={opacity} />;
+  };
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+      <SvgCanvas
+        document={collection.document}
+        layers={collection.layers}
+        renderLayer={renderLayer}
+        style={{ width: 1080, height: 1080 }}
+      />
+    </AbsoluteFill>
+  );
+};
+```
+
 A Sequence has a "from" prop that specifies the frame number where the element should appear.
 The "from" prop can be negative, in which case the Sequence will start immediately but cut off the first "from" frames.
 
@@ -367,4 +431,3 @@ If the user is using the Node.js APIs:
 - A site can be deployed using `deploySite()`: https://www.remotion.dev/docs/lambda/deploysite
 - A video can be rendered using `renderMediaOnLambda()`: https://www.remotion.dev/docs/lambda/rendermediaonlambda.
 - If a video is rendered, the progress must be polled using `getRenderProgress()`: https://www.remotion.dev/docs/lambda/getrenderprogress
-

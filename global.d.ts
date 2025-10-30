@@ -14,6 +14,9 @@ declare module 'next-intl' {
 }
 
 declare module 'svg-path-bounds' {
-  function svgPathBounds(d: string): [number, number, number, number];
-  export = svgPathBounds;
+  export default function svgPathBounds(d: string): [number, number, number, number];
+}
+
+declare module 'remotion' {
+  export * from 'remotion/dist/cjs';
 }

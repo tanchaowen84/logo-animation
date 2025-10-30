@@ -88,9 +88,10 @@ function getTsConfig(): { options: ts.CompilerOptions; fileNames: string[] } {
 }
 
 function validateTsxFile(filePath: string) {
-  const { options } = getTsConfig();
+  const { options, fileNames } = getTsConfig();
+  const rootNames = Array.from(new Set([...(fileNames ?? []), filePath]));
   const program = ts.createProgram({
-    rootNames: [filePath],
+    rootNames,
     options: {
       ...options,
       incremental: false,
@@ -102,8 +103,18 @@ function validateTsxFile(filePath: string) {
       noEmit: true,
       allowSyntheticDefaultImports: true,
       esModuleInterop: true,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      module: ts.ModuleKind.ESNext,
+      jsx: options.jsx ?? ts.JsxEmit.ReactJSX,
+      allowImportingTsExtensions: true,
+      baseUrl: options.baseUrl ?? process.cwd(),
+      paths: {
+        ...(options.paths ?? {}),
+        '@runtime': ['remotion/runtime/index.ts'],
+        '@runtime/*': ['remotion/runtime/*'],
+        '../runtime': ['remotion/runtime/index.ts'],
+        '../runtime/*': ['remotion/runtime/*'],
+      },
     },
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -158,7 +169,7 @@ export async function POST(
 
     const client = getOpenRouterClient();
     const systemPrompt = await loadAnimationSystemPrompt();
-    const model = process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'google/gemini-2.5-flash';
+    const model = process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'minimax/minimax-m2';
 
     const completion = await client.chat.completions.create({
       model,
@@ -185,6 +196,9 @@ export async function POST(
     }
 
     const modelResult = parseModelResponse(content);
+    const normalizedTsx = modelResult.tsx.replace(/from ['"]\.\.\/runtime(\/)?/g, (match, slash) => {
+      return `from '@runtime${slash ?? ''}`;
+    });
     const compositionWidth = Math.round(modelResult.width ?? 1920);
     const compositionHeight = Math.round(modelResult.height ?? 1080);
 
@@ -193,12 +207,12 @@ export async function POST(
     const tempFilePath = path.join(tempDir, `${taskId}.tsx`);
 
     try {
-      await fs.writeFile(tempFilePath, modelResult.tsx, 'utf-8');
+      await fs.writeFile(tempFilePath, normalizedTsx, 'utf-8');
       validateTsxFile(tempFilePath);
 
       const moduleFolder = `logo-tasks/${taskId}/animation`;
       const moduleUpload = await uploadFile(
-        Buffer.from(modelResult.tsx, 'utf-8'),
+        Buffer.from(normalizedTsx, 'utf-8'),
         `${taskId}.tsx`,
         'text/plain',
         moduleFolder
