@@ -7,6 +7,8 @@ export interface BBox {
   y: number;
   width: number;
   height: number;
+  cx?: number;
+  cy?: number;
 }
 
 export interface StructuredSvgNode {
@@ -31,7 +33,7 @@ function computePathMetrics(d: string): { bbox: BBox; area: number; pathLength: 
     const area = Math.abs(width * height);
     const pathLength = d.length;
     return {
-      bbox: { x: minX, y: minY, width, height },
+      bbox: { x: minX, y: minY, width, height, cx: minX + width / 2, cy: minY + height / 2 },
       area,
       pathLength,
     };

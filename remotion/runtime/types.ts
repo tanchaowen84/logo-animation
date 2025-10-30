@@ -3,6 +3,8 @@ export interface SvgBBox {
   y: number;
   width: number;
   height: number;
+  cx?: number;
+  cy?: number;
 }
 
 export interface SvgLayer {
@@ -21,8 +23,8 @@ export interface SvgLayer {
 }
 
 export interface ParsedSvgDocument {
-  width?: string;
-  height?: string;
+  width?: number;
+  height?: number;
   viewBox?: string;
   attributes: Record<string, string>;
   layers: SvgLayer[];

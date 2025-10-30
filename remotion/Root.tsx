@@ -10,8 +10,14 @@ import { generatedCompositions } from './generated/_manifest';
 
 const runtimeDemoDefaultProps = {
   vectorizedSvgUrl:
-    'https://pub-df7551e0092c4444a30e9569c7dd7100.r2.dev/logo-tasks/3bdbf8a0-a6be-4da8-9ca6-f3215d6d453c/92a4b729-88fb-4996-996d-31f4da0328b5.svg',
+    'https://pub-df7551e0092c4444a30e9569c7dd7100.r2.dev/logo-tasks/b310b8db-2f7f-40d1-b0ea-07db02166002/a203f893-8db4-44a7-8730-d763b4b398ce.svg',
 };
+
+const TestDemoWrapper: React.FC = () => (
+  <TestDemoLogoAnimation
+    vectorizedSvgUrl={runtimeDemoDefaultProps.vectorizedSvgUrl}
+  />
+);
 
 const RuntimeDemoWrapper: React.FC<Record<string, unknown>> = () => (
   <RuntimeDemo {...runtimeDemoDefaultProps} />
@@ -46,7 +52,7 @@ export const RemotionRoot: React.FC = () => {
       />
       <Composition
         id="TestDemo"
-        component={TestDemoLogoAnimation}
+        component={TestDemoWrapper}
         durationInFrames={150}
         fps={30}
         width={1920}

@@ -6,6 +6,12 @@ import type { ParsedSvgDocument, SvgBBox, SvgLayer } from './types';
 
 const LABEL_ATTRIBUTES = ['data-layer', 'data-label', 'aria-label', 'inkscape:label'];
 
+function toNumeric(value?: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function computePathBBox(d?: string): SvgBBox | undefined {
   if (!d) return undefined;
   try {
@@ -15,6 +21,8 @@ function computePathBBox(d?: string): SvgBBox | undefined {
       y: minY,
       width: maxX - minX,
       height: maxY - minY,
+      cx: minX + (maxX - minX) / 2,
+      cy: minY + (maxY - minY) / 2,
     };
   } catch (error) {
     return undefined;
@@ -85,8 +93,8 @@ export async function parseSvgToLayers(svgRaw: string): Promise<ParsedSvgDocumen
   );
 
   return {
-    width: rootAttributes.width,
-    height: rootAttributes.height,
+    width: toNumeric(rootAttributes.width),
+    height: toNumeric(rootAttributes.height),
     viewBox: rootAttributes.viewBox,
     attributes: rootAttributes,
     layers,

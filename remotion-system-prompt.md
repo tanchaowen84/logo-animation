@@ -175,6 +175,7 @@ export const MyComp: React.FC = () => {
    - 组件加载后应调用 `const { status, error, collection, runtime } = useSvgLayers({ vectorizedSvgUrl });`。
    - 根据 `status` 处理 `loading` / `error` 分支；成功后再渲染动画内容。
    - 通过 `collection.byId(...)` 或 `collection.byLabel(...)` 精确定位需要动画的层；`byLabel` 始终返回数组，请使用解构或索引（例如 `const [logomark] = collection.byLabel('logomark') ?? [];`）。如需遍历，可使用 `collection.layers` 或 `runtime.mapLayers(...)`。
+   - 非常重要：返回的 JSON 中 `props` 必须包含 `{ "vectorizedSvgUrl": vectorizedSvgUrl }`，否则后续渲染无法获取真实素材。若需要额外参数，可在此基础上扩展。
 
 2. 渲染 SVG 时应使用 `<SvgCanvas>`，通过 `renderLayer` 回调覆写每个元素的属性，避免内联原始 SVG 字符串或使用 `<img src={vectorizedSvgUrl}>` 之类的占位方案。
 
@@ -182,6 +183,9 @@ export const MyComp: React.FC = () => {
    - 声明并导出 `export interface LogoAnimationProps { vectorizedSvgUrl: string; [可选 props] }`。
    - 使用 `export const LogoAnimation: React.FC<LogoAnimationProps> = (...) => { ... }` 作为默认导出组件。
    - 所有字符串与 JSX 属性统一使用单引号，避免 JSON 解析错误。
+   - 处理 SVG 元信息时 `collection.document.width/height` 可能是字符串或 `undefined`，需通过 `Number(...)` 转换并设定合理默认值（例如 `const svgWidth = Number(collection.document?.width ?? 1080)`），并提前校验 `Number.isFinite` 后再参与运算。
+   - `collection.document` 默认没有 `bbox` 字段，若需要中心点可使用单个 `layer.bbox?.cx/cy`（运行时已补充）或基于 `layer.bbox` 自行计算；不要直接访问 `collection.document.bbox`。
+   - 在读取 `collection.byLabel(...)` 等结果后，若可能为空数组，应提前判断再参与动画计算，确保 TypeScript 不会提示值为 `undefined`。
 
 4. Remotion 环境兼容性：
    - 禁止引用 `window`、`document` 等浏览器特有对象。

@@ -169,7 +169,7 @@ export async function POST(
 
     const client = getOpenRouterClient();
     const systemPrompt = await loadAnimationSystemPrompt();
-    const model = process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'minimax/minimax-m2';
+    const model = process.env.OPENROUTER_LOGO_ANIMATION_MODEL ?? 'google/gemini-2.5-flash';
 
     const completion = await client.chat.completions.create({
       model,
@@ -196,6 +196,10 @@ export async function POST(
     }
 
     const modelResult = parseModelResponse(content);
+    const mergedProps = {
+      vectorizedSvgUrl,
+      ...(modelResult.props ?? {}),
+    };
     const normalizedTsx = modelResult.tsx.replace(/from ['"]\.\.\/runtime(\/)?/g, (match, slash) => {
       return `from '@runtime${slash ?? ''}`;
     });
@@ -225,7 +229,7 @@ export async function POST(
         compositionFps: modelResult.fps,
         compositionWidth,
         compositionHeight,
-        compositionProps: modelResult.props ?? {},
+        compositionProps: mergedProps,
         animationModuleUrl: moduleUpload.url,
         animationModuleKey: moduleUpload.key,
       });
@@ -248,7 +252,7 @@ export async function POST(
         compositionId: modelResult.compositionId,
         durationInFrames: modelResult.durationInFrames,
         fps: modelResult.fps,
-        props: modelResult.props ?? {},
+        props: mergedProps,
         width: compositionWidth,
         height: compositionHeight,
         animationModuleUrl: moduleUpload.url,

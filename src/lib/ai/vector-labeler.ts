@@ -61,7 +61,7 @@ export async function labelSvgElements({
       : rawSummary;
 
   const completion = await client.chat.completions.create({
-    model: process.env.OPENROUTER_LOGO_LABEL_MODEL ?? 'minimax/minimax-m2',
+    model: process.env.OPENROUTER_LOGO_LABEL_MODEL ?? 'google/gemini-2.5-flash',
     temperature: 0.2,
     response_format: { type: 'json_object' },
     messages: [
