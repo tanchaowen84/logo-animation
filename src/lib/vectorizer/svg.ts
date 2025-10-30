@@ -20,9 +20,9 @@ export function applySemanticLabelsToSvg(svg: string, labels: SvgSemanticLabel[]
     const dataAttr = `data-layer="${label.label}"`;
     const reasonAttr = label.reason ? ` data-label-reason="${label.reason.replace(/"/g, '&quot;')}"` : '';
 
-    const pattern = new RegExp(`(<[^>]*id="${label.id}"[^>]*)(>)`, 'i');
+    const pattern = new RegExp(`(<[^>]*id="${label.id}"[^>]*?)(\\s*/?)>`, 'i');
     if (pattern.test(output)) {
-      output = output.replace(pattern, `$1 ${dataAttr}${reasonAttr}$2`);
+      output = output.replace(pattern, `$1 ${dataAttr}${reasonAttr}$2>`);
     }
   }
 

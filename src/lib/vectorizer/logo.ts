@@ -1,6 +1,7 @@
 import { vectorize } from '@neplex/vectorizer';
 import type { Config } from '@neplex/vectorizer';
 import sharp from 'sharp';
+import { ensureSvgElementIds } from '@/lib/vectorizer/id';
 
 export interface VectorizeLogoOptions {
   /**
@@ -42,7 +43,7 @@ export async function vectorizeLogoFromBuffer(
   const HIERARCHICAL_STACKED = 0 as Config['hierarchical'];
   const PATH_SIMPLIFY_SPLINE = 2 as Config['mode'];
 
-  const svg = await vectorize(optimized, {
+  const rawSvg = await vectorize(optimized, {
     colorMode: COLOR_MODE_COLOR,
     hierarchical: HIERARCHICAL_STACKED,
     filterSpeckle: 4,
@@ -55,6 +56,8 @@ export async function vectorizeLogoFromBuffer(
     spliceThreshold: 45,
     pathPrecision: 4,
   });
+
+  const svg = await ensureSvgElementIds(rawSvg);
 
   return {
     svg,
